@@ -2,11 +2,10 @@
 {
     internal class Program
     {
-        const string eventName = "Event1";
 
         static async Task Main(string[] args)
         {
-            Console.WriteLine("Bush Websocket CLient");
+            Console.WriteLine("Bush Websocket Client");
             var client = new WebSocketClient();
             var uri = new Uri("ws://localhost:9900/");
             string eventName = "Kekw";
