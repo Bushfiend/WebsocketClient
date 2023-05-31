@@ -13,10 +13,36 @@ namespace WebsocketClient
         private ClientWebSocket? webSocket;
         private CancellationTokenSource? cancellationToken;
 
-        public async Task ConnectAsync(Uri uri)
+
+        private Uri URI { get; set; }
+
+        
+
+        public WebSocketClient(Uri uri)
         {
-            webSocket = new ClientWebSocket();
-            await webSocket.ConnectAsync(uri, CancellationToken.None);
+            URI = uri;
+        }
+
+        public async Task ConnectAsync()
+        {
+            while (true)
+            {
+                webSocket = new ClientWebSocket();
+                try
+                {
+                    await webSocket.ConnectAsync(URI, CancellationToken.None);
+                }
+                catch
+                {
+                }
+
+                if (webSocket.State == WebSocketState.Open)
+                    break;
+
+                Console.WriteLine("Connection failed. Retrying in 5 seconds...");
+                await Task.Delay(TimeSpan.FromSeconds(5));
+            }
+
             var listenTaskCompletionSource = new TaskCompletionSource<object>();
 
             cancellationToken = new CancellationTokenSource();
@@ -30,7 +56,9 @@ namespace WebsocketClient
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine("Error in ListenForMessages: " + ex.Message);
+                    Console.WriteLine("Error: " + ex.Message);
+                    Console.WriteLine("Connection closed. Reconnecting...");
+                    await ReconnectAsync();
                 }
                 finally
                 {
@@ -46,13 +74,15 @@ namespace WebsocketClient
             if (webSocket == null)
                 return;
 
-            while (webSocket.State == WebSocketState.Open)
+            while (true)
             {
                 var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
 
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
-                    await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, CancellationToken.None);
+                    Console.WriteLine("Connection closed. Reconnecting...");
+                    await ReconnectAsync();
+                    break;
                 }
                 else if (result.MessageType == WebSocketMessageType.Text)
                 {
@@ -60,13 +90,36 @@ namespace WebsocketClient
 
                     var socketMessage = SocketMessage.Deserialize(message);
 
-                    if(socketMessage.Command == SocketMessage.CommandType.SendMessage)
+                    if (socketMessage.Command == SocketMessage.CommandType.SendMessage)
                         Console.WriteLine("Received message: " + socketMessage.Message);
-                }
+                }          
             }
         }
 
-     
+
+
+        private async Task ReconnectAsync()
+        {
+            webSocket?.Dispose();
+            await Task.Delay(TimeSpan.FromSeconds(5));
+
+            while (true)
+            {
+                if (cancellationToken?.Token.IsCancellationRequested == true)
+                    return;
+
+                await ConnectAsync();
+
+                if (webSocket?.State == WebSocketState.Open)
+                {
+                    Console.WriteLine("Reconnected to the WebSocket server!");
+                    return;
+                }
+                Console.WriteLine("Reconnection failed. Retrying in 5 seconds...");
+                await Task.Delay(TimeSpan.FromSeconds(5));
+            }
+        }
+
         public async Task SendMessageAsync(SocketMessage message)
         {
             if (webSocket == null)
@@ -91,6 +144,16 @@ namespace WebsocketClient
             await webSocket.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, CancellationToken.None);
         }
   
+
+        public bool IsConnected()
+        {
+            if (webSocket == null)
+                return false;
+            if (webSocket.State == WebSocketState.Open)
+                return true;
+            else
+                return false;
+        }
         public void Disconnect()
         {
             cancellationToken?.Cancel();

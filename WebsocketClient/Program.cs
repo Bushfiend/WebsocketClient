@@ -6,28 +6,35 @@
         static async Task Main(string[] args)
         {
             Console.WriteLine("Bush Websocket Client");
-            var client = new WebSocketClient();
+
             var uri = new Uri("ws://localhost:9900/");
+            var client = new WebSocketClient(uri);
+
             string eventName = "Kekw";
 
             try
             {
-                await client.ConnectAsync(uri);
+                await client.ConnectAsync();
                 Console.WriteLine("Connected to the WebSocket server!");
 
                 await client.SendMessageAsync(new SocketMessage(SocketMessage.CommandType.Subscribe, eventName));
 
-                while (true)
+                var sendTask = Task.Run(async () =>
                 {
-                    Console.WriteLine("Press Enter to send a message.");
-                    var input = Console.ReadLine();
-                    if (input == "q")
-                        break;
-                    if (string.IsNullOrEmpty(input))
-                        continue;
+                    while (true)
+                    {
+                        Console.WriteLine("Press Enter to send a message (or 'q' to quit)...");
+                        var input = Console.ReadLine();
+                        if (input == "q")
+                            break;
+                        if (string.IsNullOrEmpty(input))
+                            continue;
 
-                    await client.SendMessageAsync(new SocketMessage(SocketMessage.CommandType.SendMessage, eventName, input));
-                }
+                        await client.SendMessageAsync(new SocketMessage(SocketMessage.CommandType.SendMessage, eventName, input));
+                    }
+                });
+
+                await sendTask;
 
                 await client.SendMessageAsync(new SocketMessage(SocketMessage.CommandType.Unsubscribe, eventName));
                 client.Disconnect();
@@ -40,5 +47,6 @@
             Console.WriteLine("Press Enter to exit...");
             Console.ReadLine();
         }
+
     }
 }
