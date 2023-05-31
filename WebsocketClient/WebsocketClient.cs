@@ -17,14 +17,11 @@ namespace WebsocketClient
         {
             webSocket = new ClientWebSocket();
             await webSocket.ConnectAsync(uri, CancellationToken.None);
-
-            // Create a task completion source to track the completion of ListenForMessages
             var listenTaskCompletionSource = new TaskCompletionSource<object>();
 
             cancellationToken = new CancellationTokenSource();
             var cancellationTokenToken = cancellationToken.Token;
 
-            // Start the message receiving loop
             _ = Task.Run(async () =>
             {
                 try
@@ -37,7 +34,7 @@ namespace WebsocketClient
                 }
                 finally
                 {
-                    listenTaskCompletionSource.SetResult(null); // Signal completion of ListenForMessages
+                    listenTaskCompletionSource.SetResult(null);
                 }
             }, cancellationTokenToken).ConfigureAwait(false);
         }
@@ -45,6 +42,9 @@ namespace WebsocketClient
         private async Task ListenForMessages()
         {
             var buffer = new byte[1024];
+
+            if (webSocket == null)
+                return;
 
             while (webSocket.State == WebSocketState.Open)
             {
@@ -57,43 +57,40 @@ namespace WebsocketClient
                 else if (result.MessageType == WebSocketMessageType.Text)
                 {
                     var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                    Console.WriteLine("Received message: " + message);
+
+                    var socketMessage = SocketMessage.Deserialize(message);
+
+                    if(socketMessage.Command == SocketMessage.CommandType.SendMessage)
+                        Console.WriteLine("Received message: " + socketMessage.Message);
                 }
             }
         }
 
-        public async Task SubscribeToEventAsync(string eventName)
-        {
-            var subscriptionMessage = $"SUBSCRIBE {eventName}";
-            await SendMessageAsync(subscriptionMessage);
-            Console.WriteLine($"Subscribed to event '{eventName}'.");
-        }
-
-        public async Task UnsubscribeFromEventAsync(string eventName)
-        {
-            var unsubscriptionMessage = $"UNSUBSCRIBE {eventName}";
-            await SendMessageAsync(unsubscriptionMessage);
-            Console.WriteLine($"Unsubscribed from event '{eventName}'.");
-        }
-
-        private async Task SendMessageAsync(string message)
+     
+        public async Task SendMessageAsync(SocketMessage message)
         {
             if (webSocket == null)
             {
                 throw new InvalidOperationException("WebSocket is not connected.");
             }
 
-            var buffer = Encoding.UTF8.GetBytes(message);
+            switch(message.Command)
+            {
+                case SocketMessage.CommandType.Subscribe:
+                    Console.WriteLine($"Subscribed to event '{message.EventName}'.");
+                    break;
+                case SocketMessage.CommandType.Unsubscribe:
+                    Console.WriteLine($"Unsubscribed to event '{message.EventName}'.");
+                    break;
+                case SocketMessage.CommandType.SendMessage:
+                    Console.WriteLine($"Sending message to event '{message.EventName}': '{message.Message}'.");
+                    break;
+            }
+                          
+            var buffer = Encoding.UTF8.GetBytes(message.Serialize());
             await webSocket.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, CancellationToken.None);
         }
-
-        public async Task SendMessageOnEventAsync(string eventName, string message)
-        {
-            var payload = $"{eventName} {message}";
-            await SendMessageAsync(payload);
-            Console.WriteLine($"Sent message on event '{eventName}': {message}");
-        }
-
+  
         public void Disconnect()
         {
             cancellationToken?.Cancel();
