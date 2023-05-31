@@ -13,10 +13,7 @@ namespace WebsocketClient
         private ClientWebSocket? webSocket;
         private CancellationTokenSource? cancellationToken;
 
-
-        private Uri URI { get; set; }
-
-        
+        private Uri URI { get; set; }     
 
         public WebSocketClient(Uri uri)
         {
@@ -48,25 +45,31 @@ namespace WebsocketClient
             cancellationToken = new CancellationTokenSource();
             var cancellationTokenToken = cancellationToken.Token;
 
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await ListenForMessages();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("Error: " + ex.Message);
-                    Console.WriteLine("Connection closed. Reconnecting...");
-                    await ReconnectAsync();
-                }
-                finally
-                {
-                    listenTaskCompletionSource.SetResult(null);
-                }
-            }, cancellationTokenToken).ConfigureAwait(false);
+            _ = Task.Run(() => StartListening(cancellationToken.Token), cancellationToken.Token);
         }
 
+        private async Task StartListening(CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await ListenAndReconnect(cancellationToken);
+            }
+        }
+
+        private async Task ListenAndReconnect(CancellationToken cancellationToken)
+        {
+            try
+            {
+                await ListenForMessages();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error: " + ex.Message);
+                Console.WriteLine("Connection closed. Reconnecting...");
+                await ReconnectAsync();
+            }
+        }
+       
         private async Task ListenForMessages()
         {
             var buffer = new byte[1024];
@@ -95,8 +98,6 @@ namespace WebsocketClient
                 }          
             }
         }
-
-
 
         private async Task ReconnectAsync()
         {

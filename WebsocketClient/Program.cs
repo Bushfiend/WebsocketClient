@@ -2,7 +2,8 @@
 {
     internal class Program
     {
-
+        private static string[] helpString = { "'/sub eventname' to subscribe to an event", };
+        
         static async Task Main(string[] args)
         {
             Console.WriteLine("Bush Websocket Client");
@@ -23,15 +24,25 @@
                 {
                     while (true)
                     {
-                        Console.WriteLine("Press Enter to send a message (or 'q' to quit)...");
+                        Console.WriteLine("Enter some text to send a message or type '/help' to get a list of commands.");
+                        Console.Write("Input:");
                         var input = Console.ReadLine();
-                        if (input == "q")
-                            break;
-                        if (string.IsNullOrEmpty(input))
-                            continue;
+                        switch(input)
+                        {
+                            case "/help":
+                                Array.ForEach(helpString, str => { Console.WriteLine(str); });
+                                break;
+                            case "q":
+                                goto quit;
+                            case "":
+                                break;
+                            default:
+                                await client.SendMessageAsync(new SocketMessage(SocketMessage.CommandType.SendMessage, eventName, input));
+                                break;
 
-                        await client.SendMessageAsync(new SocketMessage(SocketMessage.CommandType.SendMessage, eventName, input));
+                        }
                     }
+                    quit:;
                 });
 
                 await sendTask;
@@ -47,6 +58,10 @@
             Console.WriteLine("Press Enter to exit...");
             Console.ReadLine();
         }
+
+
+        
+
 
     }
 }
